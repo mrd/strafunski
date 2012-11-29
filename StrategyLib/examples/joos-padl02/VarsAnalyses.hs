@@ -11,23 +11,9 @@ import Data.List
 
 --- Variable analyses --------------------------------------------------------
 
-                                                        --- Used variables ---
-
-useVar (Identifier i) = return [i]
-useVar _              = return []
 
 collectVars 	:: Monad m => TU [Identifier] m
 collectVars 	 = full_tdTU (adhocTU (constTU []) useVar)
-
-
-                                        --- Declared variables (with type) ---
-
-declVars	:: Monad m => TU [(Identifier,Type)] m
-declVars	 = adhocTU (adhocTU (constTU []) declVarsBlock) declVarsMeth
-	where declVarsBlock (BlockStatements vds _)
-                = return (map (\(VariableDecl t i) -> (i,t)) vds)
-              declVarsMeth (MethodDecl _ _ (FormalParams fps) _)
-                = return (map (\(FormalParam t i) -> (i,t)) fps)
 
 
 -- To take field declarations and formal parameters of constructor 
@@ -39,14 +25,46 @@ declVarsConstr (ConstructorDecl _ (FormalParams fps) _ _)
 declVarsClass  (ClassDecl _ _ _ fds _ _)
   = return (map (\(FieldDecl t i) -> (i,t)) fds)
 
-                                                     --- Defined variables ---
+
+-- Rewrite rule to collect a used variable
+
+useVar (Identifier i) = return [i]
+useVar _              = return []
+
+
+-- Rewrite rule to collect a defined variable
 
 defVar (Assignment i _) = return [i]
+defVar _ = return []
 
-                                   --- Two kinds of free variable analysis ---
+
+-- Declared variables (with type)
+
+declVars :: Monad m => TU [(Identifier,Type)] m
+declVars
+  = adhocTU (adhocTU (constTU []) declVarsBlock) declVarsMeth
+    where
+      declVarsBlock (BlockStatements vds _)
+        = return (map (\(VariableDecl t i) -> (i,t)) vds)
+      declVarsMeth (MethodDecl _ _ (FormalParams fps) _)
+        = return (map (\(FormalParam t i) -> (i,t)) fps)
+                                  
+
+-- Find used, free variables
+freeUseVars :: 
+     Monad m
+  => [(Identifier,Type)]
+  -> TU [(Identifier,Type)] m
+
+-- Find defined, free variables
+freeDefVars ::
+     Monad m
+  => [(Identifier,Type)]
+  -> TU [(Identifier,Type)] m
 
 freeUseVars env
   = dotTU nubMap (typed_free_vars env (adhocTU (constTU []) useVar) declVars)
+
 freeDefVars env
   = dotTU nubMap (typed_free_vars env (adhocTU (constTU []) defVar) declVars)
 
